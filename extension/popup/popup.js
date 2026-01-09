@@ -1,7 +1,7 @@
 /**
  * Bypass Subtitles - Popup Script
  * 
- * Controls the extension popup UI with language selection.
+ * Controls the extension popup UI with language selection and API mode.
  */
 
 // DOM Elements
@@ -14,6 +14,10 @@ const backendText = document.getElementById('backend-text');
 const sourceLang = document.getElementById('source-lang');
 const targetLang = document.getElementById('target-lang');
 const showOriginal = document.getElementById('show-original');
+const apiMode = document.getElementById('api-mode');
+const groqSettings = document.getElementById('groq-settings');
+const groqApiKey = document.getElementById('groq-api-key');
+const toggleKeyVisibility = document.getElementById('toggle-key-visibility');
 
 // State
 let isEnabled = false;
@@ -23,6 +27,8 @@ const DEFAULT_SETTINGS = {
     sourceLang: 'auto',
     targetLang: 'vi',
     showOriginal: true,
+    apiMode: 'groq',  // Default to Groq for non-tech users
+    groqApiKey: '',
 };
 
 /**
@@ -40,6 +46,10 @@ async function init() {
     sourceLang.addEventListener('change', saveSettings);
     targetLang.addEventListener('change', saveSettings);
     showOriginal.addEventListener('change', saveSettings);
+    apiMode.addEventListener('change', onApiModeChange);
+    groqApiKey.addEventListener('change', saveSettings);
+    groqApiKey.addEventListener('blur', saveSettings);
+    toggleKeyVisibility.addEventListener('click', toggleApiKeyVisibility);
 }
 
 /**
@@ -51,6 +61,11 @@ async function loadSettings() {
         sourceLang.value = result.sourceLang;
         targetLang.value = result.targetLang;
         showOriginal.checked = result.showOriginal;
+        apiMode.value = result.apiMode;
+        groqApiKey.value = result.groqApiKey || '';
+
+        // Show/hide Groq settings
+        updateGroqSettingsVisibility();
     } catch (error) {
         console.error('Failed to load settings:', error);
     }
@@ -61,24 +76,60 @@ async function loadSettings() {
  */
 async function saveSettings() {
     try {
-        await chrome.storage.sync.set({
+        const settings = {
             sourceLang: sourceLang.value,
             targetLang: targetLang.value,
             showOriginal: showOriginal.checked,
-        });
+            apiMode: apiMode.value,
+            groqApiKey: groqApiKey.value,
+        };
+
+        await chrome.storage.sync.set(settings);
 
         // Notify content script of settings change
-        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-        await chrome.tabs.sendMessage(tab.id, {
-            action: 'updateSettings',
-            settings: {
-                sourceLang: sourceLang.value,
-                targetLang: targetLang.value,
-                showOriginal: showOriginal.checked,
-            },
-        });
+        try {
+            const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+            await chrome.tabs.sendMessage(tab.id, {
+                action: 'updateSettings',
+                settings,
+            });
+        } catch (e) {
+            // Content script might not be loaded
+        }
     } catch (error) {
         console.error('Failed to save settings:', error);
+    }
+}
+
+/**
+ * Handle API mode change
+ */
+function onApiModeChange() {
+    updateGroqSettingsVisibility();
+    saveSettings();
+}
+
+/**
+ * Show/hide Groq settings based on API mode
+ */
+function updateGroqSettingsVisibility() {
+    if (apiMode.value === 'groq') {
+        groqSettings.style.display = 'block';
+    } else {
+        groqSettings.style.display = 'none';
+    }
+}
+
+/**
+ * Toggle API key visibility
+ */
+function toggleApiKeyVisibility() {
+    if (groqApiKey.type === 'password') {
+        groqApiKey.type = 'text';
+        toggleKeyVisibility.textContent = '🙈';
+    } else {
+        groqApiKey.type = 'password';
+        toggleKeyVisibility.textContent = '👁️';
     }
 }
 
@@ -102,13 +153,23 @@ async function updateStatus() {
             videoText.textContent = 'Not found';
         }
 
-        // Update backend status
-        if (response.isConnected) {
-            backendDot.classList.add('connected');
-            backendText.textContent = 'Connected';
+        // Update backend/API status
+        if (apiMode.value === 'groq') {
+            if (groqApiKey.value) {
+                backendDot.classList.add('connected');
+                backendText.textContent = 'Groq API';
+            } else {
+                backendDot.classList.remove('connected');
+                backendText.textContent = 'Need API Key';
+            }
         } else {
-            backendDot.classList.remove('connected');
-            backendText.textContent = 'Disconnected';
+            if (response.isConnected) {
+                backendDot.classList.add('connected');
+                backendText.textContent = 'Connected';
+            } else {
+                backendDot.classList.remove('connected');
+                backendText.textContent = 'Disconnected';
+            }
         }
 
         // Update toggle button
@@ -141,6 +202,12 @@ function updateToggleButton() {
  */
 async function toggleSubtitles() {
     try {
+        // Validate Groq API key if using Groq mode
+        if (apiMode.value === 'groq' && !groqApiKey.value) {
+            alert('Please enter your Groq API key first.\n\nGet a free key at: https://console.groq.com/keys');
+            return;
+        }
+
         const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
 
         const action = isEnabled ? 'disable' : 'enable';
@@ -152,6 +219,8 @@ async function toggleSubtitles() {
                 sourceLang: sourceLang.value,
                 targetLang: targetLang.value,
                 showOriginal: showOriginal.checked,
+                apiMode: apiMode.value,
+                groqApiKey: groqApiKey.value,
             },
         });
 

@@ -225,6 +225,67 @@
       color: #e0e0e0;
       cursor: pointer;
     }
+
+    /* API Key Input */
+    .api-mode-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .api-key-row {
+      display: flex;
+      gap: 8px;
+    }
+
+    .api-key-input {
+      flex: 1;
+      padding: 10px 12px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.05);
+      color: #e0e0e0;
+      font-size: 13px;
+      font-family: monospace;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .api-key-input:focus {
+      border-color: #6366f1;
+    }
+
+    .api-key-input::placeholder {
+      color: #6b7280;
+    }
+
+    .key-toggle {
+      padding: 8px 12px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.05);
+      color: #e0e0e0;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .key-toggle:hover {
+      background: rgba(255, 255, 255, 0.1);
+    }
+
+    .api-help {
+      margin-top: 8px;
+      font-size: 12px;
+    }
+
+    .api-help a {
+      color: #a5b4fc;
+      text-decoration: none;
+    }
+
+    .api-help a:hover {
+      text-decoration: underline;
+    }
   </style>
 </head>
 
@@ -300,6 +361,29 @@
     </div>
   </div>
 
+  <!-- API Settings Section -->
+  <div class="section" id="api-settings">
+    <div class="section-title">API Settings (Cloud Mode)</div>
+
+    <div class="api-mode-row">
+      <span class="language-label">Mode</span>
+      <select id="api-mode" class="language-select">
+        <option value="local">🖥️ Local Backend</option>
+        <option value="groq">⚡ Groq API (Fast & Free)</option>
+      </select>
+    </div>
+
+    <div id="groq-settings" style="margin-top: 12px; display: none;">
+      <div class="api-key-row">
+        <input type="password" id="groq-api-key" class="api-key-input" placeholder="Enter Groq API Key">
+        <button id="toggle-key-visibility" class="key-toggle">👁️</button>
+      </div>
+      <div class="api-help">
+        <a href="https://console.groq.com/keys" target="_blank">🔑 Get free API key</a>
+      </div>
+    </div>
+  </div>
+
   <!-- Action Button -->
   <button class="toggle-btn enable" id="toggle-btn">
     <span>▶️</span>
@@ -308,7 +392,7 @@
 
   <div class="footer">
     <span>Ctrl + Click video to select</span> ·
-    <a href="#" id="settings-link">Settings</a>
+    <a href="https://github.com/JWangZhi/Bypass-Subtitles" target="_blank">GitHub</a>
   </div>
 
   <script src="popup.js"></script>

@@ -24,11 +24,13 @@ let audioChunks = [];
 let subtitleOverlay = null;
 let sendInterval = null;
 
-// Language settings
+// Language and API settings
 let currentSettings = {
     sourceLang: 'auto',
     targetLang: 'vi',
     showOriginal: true,
+    apiMode: 'groq',  // 'local' or 'groq'
+    groqApiKey: '',
 };
 
 /**
@@ -313,13 +315,18 @@ async function enableSubtitles() {
     }
 
     console.log('🟢 Enabling subtitles...');
+    console.log(`📡 Mode: ${currentSettings.apiMode}`);
     isEnabled = true;
 
     // Add video event listeners for sync
     setupVideoEventListeners();
 
-    // Connect to backend
-    await connectWebSocket();
+    // Connect to backend only if using local mode
+    if (currentSettings.apiMode === 'local') {
+        await connectWebSocket();
+    } else {
+        console.log('⚡ Using Groq API - no WebSocket needed');
+    }
 
     // Start audio capture
     await startAudioCapture();
@@ -327,7 +334,8 @@ async function enableSubtitles() {
     // Create subtitle overlay
     createSubtitleOverlay();
 
-    showNotification('Subtitles enabled');
+    const modeText = currentSettings.apiMode === 'groq' ? 'Groq API' : 'Local Backend';
+    showNotification(`Subtitles enabled (${modeText})`);
 }
 
 /**
@@ -503,7 +511,6 @@ async function startAudioCapture() {
         showNotification('Failed to capture audio. Try refreshing the page.', 'error');
     }
 }
-
 /**
  * Send accumulated audio chunks to backend with settings and video timestamp
  */
@@ -530,17 +537,64 @@ function sendAudioChunks() {
     // Convert to base64 for JSON transmission
     const base64Audio = arrayBufferToBase64(mergedData.buffer);
 
-    // Send JSON message with audio, settings, and video timestamp
+    // Send based on API mode
+    if (currentSettings.apiMode === 'groq') {
+        // Send to background script for Groq API
+        sendToGroqAPI(base64Audio, videoTime);
+    } else {
+        // Send to local backend via WebSocket
+        sendToLocalBackend(base64Audio, videoTime);
+    }
+}
+
+/**
+ * Send audio to Groq API via background script
+ */
+async function sendToGroqAPI(base64Audio, videoTime) {
+    try {
+        console.log(`📤 Sending to Groq API @ ${formatTime(videoTime)}`);
+
+        const response = await chrome.runtime.sendMessage({
+            action: 'transcribe',
+            audio: base64Audio,
+            apiKey: currentSettings.groqApiKey,
+            sourceLang: currentSettings.sourceLang,
+            targetLang: currentSettings.targetLang,
+            showOriginal: currentSettings.showOriginal,
+        });
+
+        if (response.error) {
+            console.error('❌ Groq API error:', response.error);
+            return;
+        }
+
+        // Handle transcription result
+        handleTranscription(response);
+
+    } catch (error) {
+        console.error('❌ Failed to send to Groq API:', error);
+    }
+}
+
+/**
+ * Send audio to local backend via WebSocket
+ */
+function sendToLocalBackend(base64Audio, videoTime) {
+    if (!websocket || websocket.readyState !== WebSocket.OPEN) {
+        console.warn('⚠️ WebSocket not connected');
+        return;
+    }
+
     const message = {
         audio: base64Audio,
         sourceLang: currentSettings.sourceLang,
         targetLang: currentSettings.targetLang,
         showOriginal: currentSettings.showOriginal,
-        videoTime: videoTime, // Current position in video (seconds)
+        videoTime: videoTime,
     };
 
     websocket.send(JSON.stringify(message));
-    console.log(`📤 Sent ${totalLength} samples @ ${formatTime(videoTime)}`);
+    console.log(`📤 Sent to local backend @ ${formatTime(videoTime)}`);
 }
 
 /**
