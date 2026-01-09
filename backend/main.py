@@ -181,7 +181,10 @@ async def websocket_transcribe(websocket: WebSocket) -> None:
     except WebSocketDisconnect:
         print(f"🔌 Client {client_id} disconnected")
     except Exception as e:
-        print(f"❌ Error with client {client_id}: {e}")
+        # Ignore "disconnect message" errors - these are normal when client closes
+        error_msg = str(e)
+        if "disconnect" not in error_msg.lower():
+            print(f"❌ Error with client {client_id}: {e}")
         try:
             await websocket.close(code=1011, reason=str(e))
         except Exception:

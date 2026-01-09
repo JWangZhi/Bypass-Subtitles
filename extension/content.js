@@ -8,9 +8,9 @@
 // Configuration
 const CONFIG = {
     BACKEND_WS_URL: 'ws://localhost:8765/ws/transcribe',
-    AUDIO_CHUNK_DURATION_MS: 4000, // 4 giây - nhiều context hơn cho translation
+    AUDIO_CHUNK_DURATION_MS: 3000, // 3 giây - vừa đúng Groq free tier (20 req/min)
     SAMPLE_RATE: 16000, // 16kHz for Whisper
-    SUBTITLE_DISPLAY_DURATION_MS: 6000, // 6 giây - đủ thời gian đọc
+    SUBTITLE_DISPLAY_DURATION_MS: 5000, // 5 giây
 };
 
 // State
@@ -61,8 +61,16 @@ async function loadSettings() {
             sourceLang: 'auto',
             targetLang: 'vi',
             showOriginal: true,
+            apiMode: 'groq',
+            groqApiKey: '',
         });
         currentSettings = result;
+        console.log('⚙️ Loaded settings:', {
+            apiMode: result.apiMode,
+            hasApiKey: !!result.groqApiKey,
+            sourceLang: result.sourceLang,
+            targetLang: result.targetLang,
+        });
     } catch (error) {
         console.error('Failed to load settings:', error);
     }
@@ -499,8 +507,13 @@ async function startAudioCapture() {
 
         // Send audio chunks periodically
         sendInterval = setInterval(() => {
-            if (audioChunks.length > 0 && websocket?.readyState === WebSocket.OPEN) {
-                sendAudioChunks();
+            if (audioChunks.length > 0) {
+                // For Groq mode, don't need WebSocket check
+                if (currentSettings.apiMode === 'groq') {
+                    sendAudioChunks();
+                } else if (websocket?.readyState === WebSocket.OPEN) {
+                    sendAudioChunks();
+                }
             }
         }, CONFIG.AUDIO_CHUNK_DURATION_MS);
 
