@@ -24,6 +24,12 @@ let audioChunks = [];
 let subtitleOverlay = null;
 let sendInterval = null;
 
+// Adaptive chunk sizing state
+let currentChunkDuration = CONFIG.AUDIO_CHUNK_DURATION_MS;
+let lastProcessingTime = 0;
+let lagAccumulator = 0;
+const MAX_LAG_MS = 5000; // Skip chunks if lag > 5 seconds
+
 // Language and API settings
 let currentSettings = {
     sourceLang: 'auto',
@@ -371,7 +377,28 @@ function setupVideoEventListeners() {
         console.log('▶️ Video playing');
     });
 
+    // Handle playback rate changes
+    activeVideo.addEventListener('ratechange', () => {
+        handlePlaybackRateChange(activeVideo.playbackRate);
+    });
+
     console.log('✅ Video event listeners setup');
+}
+
+/**
+ * Handle playback rate changes - adjust chunk size and show warnings
+ */
+function handlePlaybackRateChange(rate) {
+    console.log(`⚡ Playback rate changed to: ${rate}x`);
+
+    if (rate > 2.0) {
+        showNotification('⚠️ Speed too high! Subtitles may not work at >2x', 'warning');
+        // Could disable transcription here
+    } else if (rate > 1.5) {
+        showNotification(`⚠️ Speed: ${rate}x - Accuracy may be reduced`, 'warning');
+    } else if (rate < 0.5) {
+        showNotification(`Speed: ${rate}x - Subtitles will be slower`, 'info');
+    }
 }
 
 /**
@@ -564,7 +591,17 @@ function sendAudioChunks() {
  * Send audio to Groq API via background script
  */
 async function sendToGroqAPI(base64Audio, videoTime) {
+    const startTime = Date.now();
+
     try {
+        // Check if we're too far behind - skip if so
+        const chunkAge = Date.now() - (videoTime * 1000);
+        if (chunkAge > MAX_LAG_MS) {
+            console.warn(`⏭️ Skipping chunk: too far behind (${Math.round(chunkAge / 1000)}s lag)`);
+            lagAccumulator = 0;
+            return;
+        }
+
         console.log(`📤 Sending to Groq API @ ${formatTime(videoTime)}`);
 
         const response = await chrome.runtime.sendMessage({
@@ -575,6 +612,11 @@ async function sendToGroqAPI(base64Audio, videoTime) {
             targetLang: currentSettings.targetLang,
             showOriginal: currentSettings.showOriginal,
         });
+
+        // Track processing time for adaptive sizing
+        const processingTime = Date.now() - startTime;
+        lastProcessingTime = processingTime;
+        adaptChunkSize(processingTime);
 
         if (response.error) {
             console.error('❌ Groq API error:', response.error);
@@ -587,6 +629,44 @@ async function sendToGroqAPI(base64Audio, videoTime) {
     } catch (error) {
         console.error('❌ Failed to send to Groq API:', error);
     }
+}
+
+/**
+ * Adapt chunk size based on processing time
+ */
+function adaptChunkSize(processingTime) {
+    const threshold = currentChunkDuration * 0.8;
+
+    // If processing takes too long, increase chunk size
+    if (processingTime > threshold && currentChunkDuration < 6000) {
+        currentChunkDuration = Math.min(6000, currentChunkDuration + 500);
+        console.warn(`⏱️ Processing slow (${processingTime}ms). Increasing chunk to ${currentChunkDuration}ms`);
+        restartSendInterval();
+    }
+    // If processing is fast, can decrease for lower latency
+    else if (processingTime < currentChunkDuration * 0.3 && currentChunkDuration > 2000) {
+        currentChunkDuration = Math.max(2000, currentChunkDuration - 500);
+        console.log(`⚡ Processing fast (${processingTime}ms). Decreasing chunk to ${currentChunkDuration}ms`);
+        restartSendInterval();
+    }
+}
+
+/**
+ * Restart send interval with new chunk duration
+ */
+function restartSendInterval() {
+    if (sendInterval) {
+        clearInterval(sendInterval);
+    }
+    sendInterval = setInterval(() => {
+        if (audioChunks.length > 0) {
+            if (currentSettings.apiMode === 'groq') {
+                sendAudioChunks();
+            } else if (websocket?.readyState === WebSocket.OPEN) {
+                sendAudioChunks();
+            }
+        }
+    }, currentChunkDuration);
 }
 
 /**

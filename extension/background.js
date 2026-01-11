@@ -10,6 +10,9 @@ let extensionEnabled = false;
 // Groq API endpoint
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/audio/transcriptions';
 
+// Utility: sleep function for retry delays
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
 /**
  * Handle extension icon click (when no popup)
  */
@@ -76,10 +79,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 });
 
 /**
- * Handle Groq API transcription
+ * Handle Groq API transcription with retry logic
  */
-async function handleGroqTranscription(message) {
+async function handleGroqTranscription(message, retryCount = 0) {
     const { audio, apiKey, sourceLang } = message;
+    const MAX_RETRIES = 3;
 
     if (!apiKey) {
         throw new Error('No API key provided');
@@ -100,7 +104,7 @@ async function handleGroqTranscription(message) {
             formData.append('language', sourceLang);
         }
 
-        console.log('🔄 Calling Groq API...');
+        console.log(`🔄 Calling Groq API... ${retryCount > 0 ? `(retry ${retryCount})` : ''}`);
 
         const response = await fetch(GROQ_API_URL, {
             method: 'POST',
@@ -109,6 +113,14 @@ async function handleGroqTranscription(message) {
             },
             body: formData,
         });
+
+        // Handle rate limit (429)
+        if (response.status === 429 && retryCount < MAX_RETRIES) {
+            const retryAfter = parseInt(response.headers.get('retry-after') || '5', 10);
+            console.warn(`⏳ Rate limited. Retrying in ${retryAfter}s...`);
+            await sleep(retryAfter * 1000);
+            return handleGroqTranscription(message, retryCount + 1);
+        }
 
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
