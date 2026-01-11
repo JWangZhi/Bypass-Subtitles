@@ -268,12 +268,15 @@ function processChunk(chunk, captureTime) {
 
 ---
 
-## 🚀 Implementation Priority
+## 🚀 Implementation Status
 
-1. [x] Groq API mode (implemented)
-2. [x] Local backend mode (implemented)
-3. [ ] Playback rate detection
-4. [ ] Adaptive chunk sizing
-5. [ ] Hardware auto-detection
-6. [ ] Skip strategy for lag prevention
-7. [ ] Rate limit retry handler
+| # | Feature | Status | File |
+|---|---------|--------|------|
+| 1 | Groq API mode | ✅ Done | `background.js`, `content.js` |
+| 2 | Local backend mode | ✅ Done | `content.js`, `backend/` |
+| 3 | Rate Limit Retry Handler | ✅ Done | `background.js` |
+| 4 | Playback Rate Detection | ✅ Done | `content.js` |
+| 5 | Adaptive Chunk Sizing | ✅ Done | `content.js` |
+| 6 | Skip Strategy (Lag Prevention) | ✅ Done | `content.js` |
+| 7 | Video Change Handler | ⏳ Pending | - |
+| 8 | Hardware Auto-Detection | ⏳ Pending | - |
