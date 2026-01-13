@@ -18,6 +18,7 @@ const apiMode = document.getElementById('api-mode');
 const groqSettings = document.getElementById('groq-settings');
 const groqApiKey = document.getElementById('groq-api-key');
 const toggleKeyVisibility = document.getElementById('toggle-key-visibility');
+const reloadPageBtn = document.getElementById('reload-page-btn');
 
 // State
 let isEnabled = false;
@@ -41,6 +42,9 @@ async function init() {
     // Get current status
     await updateStatus();
 
+    // Detect hardware and show recommendation (first time only)
+    await detectHardwareAndRecommend();
+
     // Event listeners
     toggleBtn.addEventListener('click', toggleSubtitles);
     sourceLang.addEventListener('change', saveSettings);
@@ -50,6 +54,168 @@ async function init() {
     groqApiKey.addEventListener('change', saveSettings);
     groqApiKey.addEventListener('blur', saveSettings);
     toggleKeyVisibility.addEventListener('click', toggleApiKeyVisibility);
+    reloadPageBtn.addEventListener('click', reloadCurrentPage);
+}
+
+/**
+ * Reload current page to detect videos
+ */
+async function reloadCurrentPage() {
+    try {
+        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        await chrome.tabs.reload(tab.id);
+        window.close(); // Close popup after reload
+    } catch (error) {
+        console.error('Failed to reload page:', error);
+    }
+}
+
+/**
+ * Detect hardware and recommend optimal mode
+ */
+async function detectHardwareAndRecommend() {
+    try {
+        // Check if already recommended
+        const { hardwareChecked } = await chrome.storage.local.get('hardwareChecked');
+        if (hardwareChecked) return;
+
+        // Detect GPU via WebGL
+        const gpuInfo = detectGPU();
+        console.log('🖥️ Detected GPU:', gpuInfo);
+
+        // Recommend based on GPU
+        const recommendation = getRecommendation(gpuInfo);
+
+        // Show recommendation if it differs from current setting
+        if (recommendation.mode !== apiMode.value) {
+            showHardwareRecommendation(gpuInfo, recommendation);
+        }
+
+        // Mark as checked
+        await chrome.storage.local.set({ hardwareChecked: true });
+
+    } catch (error) {
+        console.error('Failed to detect hardware:', error);
+    }
+}
+
+/**
+ * Detect GPU via WebGL
+ */
+function detectGPU() {
+    try {
+        const canvas = document.createElement('canvas');
+        const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+
+        if (!gl) {
+            return { vendor: 'Unknown', renderer: 'Unknown', tier: 'low' };
+        }
+
+        const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
+        if (!debugInfo) {
+            return { vendor: 'Unknown', renderer: 'Unknown', tier: 'low' };
+        }
+
+        const vendor = gl.getParameter(debugInfo.UNMASKED_VENDOR_WEBGL);
+        const renderer = gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL);
+
+        // Determine tier
+        let tier = 'low';
+        const rendererLower = renderer.toLowerCase();
+
+        if (rendererLower.includes('rtx 40') || rendererLower.includes('rtx 30') ||
+            rendererLower.includes('a100') || rendererLower.includes('h100')) {
+            tier = 'high';
+        } else if (rendererLower.includes('rtx 20') || rendererLower.includes('gtx 10') ||
+            rendererLower.includes('gtx 16') || rendererLower.includes('radeon rx 6') ||
+            rendererLower.includes('apple m')) {
+            tier = 'medium';
+        }
+
+        return { vendor, renderer, tier };
+
+    } catch (error) {
+        return { vendor: 'Unknown', renderer: 'Unknown', tier: 'low' };
+    }
+}
+
+/**
+ * Get recommendation based on GPU tier
+ */
+function getRecommendation(gpuInfo) {
+    switch (gpuInfo.tier) {
+        case 'high':
+            return {
+                mode: 'local',
+                model: 'small',
+                reason: `Strong GPU detected (${gpuInfo.renderer}). Local mode recommended for best privacy.`
+            };
+        case 'medium':
+            return {
+                mode: 'local',
+                model: 'tiny',
+                reason: `Medium GPU detected (${gpuInfo.renderer}). Local mode possible with lightweight model.`
+            };
+        default:
+            return {
+                mode: 'groq',
+                model: 'whisper-large-v3',
+                reason: 'Groq API recommended for best performance on your hardware.'
+            };
+    }
+}
+
+/**
+ * Show hardware recommendation to user
+ */
+function showHardwareRecommendation(gpuInfo, recommendation) {
+    // Create recommendation banner
+    const banner = document.createElement('div');
+    banner.id = 'hardware-recommendation';
+    banner.style.cssText = `
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 12px;
+        margin: -15px -15px 15px -15px;
+        border-radius: 12px 12px 0 0;
+        font-size: 12px;
+    `;
+    banner.innerHTML = `
+        <div style="font-weight: 600; margin-bottom: 4px;">💡 Hardware Detected</div>
+        <div style="opacity: 0.9; font-size: 11px;">${recommendation.reason}</div>
+        <button id="apply-recommendation" style="
+            background: rgba(255,255,255,0.2);
+            border: 1px solid rgba(255,255,255,0.3);
+            color: white;
+            padding: 4px 12px;
+            border-radius: 4px;
+            margin-top: 8px;
+            cursor: pointer;
+            font-size: 11px;
+        ">Apply Recommendation</button>
+        <button id="dismiss-recommendation" style="
+            background: transparent;
+            border: none;
+            color: rgba(255,255,255,0.7);
+            padding: 4px 8px;
+            cursor: pointer;
+            font-size: 11px;
+        ">Dismiss</button>
+    `;
+
+    document.body.insertBefore(banner, document.body.firstChild);
+
+    // Event handlers
+    document.getElementById('apply-recommendation').addEventListener('click', () => {
+        apiMode.value = recommendation.mode;
+        onApiModeChange();
+        saveSettings();
+        banner.remove();
+    });
+
+    document.getElementById('dismiss-recommendation').addEventListener('click', () => {
+        banner.remove();
+    });
 }
 
 /**

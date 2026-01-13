@@ -42,3 +42,4 @@ extension/*.pem
 
 # AI Agent config (local only)
 .agents/
+docs/

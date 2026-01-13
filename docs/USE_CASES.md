@@ -278,5 +278,7 @@ function processChunk(chunk, captureTime) {
 | 4 | Playback Rate Detection | ✅ Done | `content.js` |
 | 5 | Adaptive Chunk Sizing | ✅ Done | `content.js` |
 | 6 | Skip Strategy (Lag Prevention) | ✅ Done | `content.js` |
-| 7 | Video Change Handler | ⏳ Pending | - |
-| 8 | Hardware Auto-Detection | ⏳ Pending | - |
+| 7 | Video Change Handler | ✅ Done | `content.js` |
+| 8 | Hardware Auto-Detection | ✅ Done | `popup.js` |
+
+**All 8 algorithms implemented! 🎉**

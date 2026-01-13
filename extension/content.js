@@ -272,35 +272,97 @@ function highlightVideo(video, index) {
 }
 
 /**
- * Observe DOM for dynamically added videos
+ * Observe DOM for dynamically added videos and video changes
  */
 function observeDOM() {
     const observer = new MutationObserver((mutations) => {
         mutations.forEach((mutation) => {
             mutation.addedNodes.forEach((node) => {
                 if (node.nodeName === 'VIDEO') {
-                    const videos = document.querySelectorAll('video');
-                    highlightVideo(node, videos.length - 1);
-                    console.log('🆕 New video detected');
+                    handleNewVideoDetected(node);
                 }
 
                 // Check for videos inside added nodes
                 if (node.querySelectorAll) {
                     const videos = node.querySelectorAll('video');
                     videos.forEach((video) => {
-                        const allVideos = document.querySelectorAll('video');
-                        const index = Array.from(allVideos).indexOf(video);
-                        highlightVideo(video, index);
+                        handleNewVideoDetected(video);
                     });
                 }
             });
+
+            // Detect video source changes (YouTube next video, etc.)
+            if (mutation.type === 'attributes' && mutation.attributeName === 'src') {
+                const target = mutation.target;
+                if (target.nodeName === 'VIDEO' || target.nodeName === 'SOURCE') {
+                    const video = target.nodeName === 'VIDEO' ? target : target.closest('video');
+                    if (video && video === activeVideo && isEnabled) {
+                        console.log('🔄 Video source changed - resetting state');
+                        resetTranscriptionState();
+                    }
+                }
+            }
         });
     });
 
     observer.observe(document.body, {
         childList: true,
         subtree: true,
+        attributes: true,
+        attributeFilter: ['src'],
     });
+}
+
+/**
+ * Handle new video detected
+ */
+function handleNewVideoDetected(video) {
+    const videos = document.querySelectorAll('video');
+    const index = Array.from(videos).indexOf(video);
+    highlightVideo(video, index);
+    console.log('🆕 New video detected');
+
+    // If subtitles enabled and this is the main video, switch to it
+    if (isEnabled && videos.length === 1) {
+        console.log('📺 Auto-switching to new video');
+        switchToVideo(video);
+    }
+}
+
+/**
+ * Switch to a new video (reset state and start capture)
+ */
+function switchToVideo(newVideo) {
+    // Stop current capture
+    stopAudioCapture();
+
+    // Reset state
+    resetTranscriptionState();
+
+    // Setup new video
+    activeVideo = newVideo;
+    setupVideoEventListeners();
+
+    // Restart capture if enabled
+    if (isEnabled) {
+        startAudioCapture();
+        showNotification('Switched to new video');
+    }
+}
+
+/**
+ * Reset transcription state (called on video change or seek)
+ */
+function resetTranscriptionState() {
+    audioChunks = [];
+    lagAccumulator = 0;
+    currentChunkDuration = CONFIG.AUDIO_CHUNK_DURATION_MS;
+
+    if (subtitleOverlay) {
+        subtitleOverlay.innerHTML = '';
+    }
+
+    console.log('🔄 Transcription state reset');
 }
 
 /**
