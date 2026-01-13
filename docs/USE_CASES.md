@@ -270,6 +270,8 @@ function processChunk(chunk, captureTime) {
 
 ## 🚀 Implementation Status
 
+### Phase 1: Core Features ✅
+
 | # | Feature | Status | File |
 |---|---------|--------|------|
 | 1 | Groq API mode | ✅ Done | `background.js`, `content.js` |
@@ -281,4 +283,113 @@ function processChunk(chunk, captureTime) {
 | 7 | Video Change Handler | ✅ Done | `content.js` |
 | 8 | Hardware Auto-Detection | ✅ Done | `popup.js` |
 
-**All 8 algorithms implemented! 🎉**
+---
+
+### Phase 2: Local Mode for Non-Tech Users 🎯
+
+**Goal:** Cho phép non-tech users dùng local mode mà không cần Docker/command line.
+
+| # | Feature | Status | Priority |
+|---|---------|--------|----------|
+| 9 | WASM Whisper Integration | ⏳ Pending | 🔴 High |
+| 10 | IndexedDB Subtitle Storage | ⏳ Pending | 🔴 High |
+| 11 | Model Download & Cache | ⏳ Pending | 🔴 High |
+| 12 | Offline Mode | ⏳ Pending | 🟡 Medium |
+
+---
+
+## 🧠 Use Case 6: WASM Local Mode (Non-Tech Users)
+
+### Scenario
+
+Non-tech user muốn dùng local mode để privacy, nhưng không biết Docker/command line.
+
+### User Flow
+
+```
+1. User install extension
+2. User mở video
+3. User chọn "Local (Privacy)" mode
+4. [First time] Extension tự download model (~39-74MB)
+5. Model được cache trong browser
+6. Transcription chạy hoàn toàn trong browser (WASM)
+7. Không cần internet sau khi có model
+```
+
+### Technical Requirements
+
+| Component | Technology | Notes |
+|-----------|------------|-------|
+| **Runtime** | WebAssembly (WASM) | whisper.cpp compiled to WASM |
+| **Model** | tiny (39MB) or base (74MB) | Balance speed/accuracy |
+| **Storage** | Cache API / OPFS | Persist model across sessions |
+| **Performance** | ~2-3x realtime | Acceptable for most use cases |
+
+### Challenges
+
+| Challenge | Solution |
+|-----------|----------|
+| Model size (39-74MB) | Download once, cache forever |
+| Browser performance | Use tiny/base models only |
+| Background tab throttling | Warn user to keep tab active |
+| Browser compatibility | Require WASM SIMD support |
+
+---
+
+## 💾 Use Case 7: Subtitle Storage (IndexedDB)
+
+### Scenario
+
+User xem video, muốn lưu subtitles để xem lại sau hoặc export.
+
+### Requirements
+
+- Lưu subtitles locally trong browser
+- Persist across browser sessions
+- Search/filter by video
+- Export to SRT/VTT format
+- Sync across devices (future)
+
+### Database Schema
+
+```javascript
+// IndexedDB Store: subtitles
+{
+  id: "uuid",
+  videoHash: "sha256_of_url",
+  videoTitle: "Video Title",
+  videoUrl: "https://...",
+  createdAt: Date,
+  updatedAt: Date,
+  duration: 3600, // seconds
+  segments: [
+    { start: 0.0, end: 3.5, text: "Hello", translated: "Xin chào" }
+  ],
+  metadata: {
+    sourceLanguage: "en",
+    targetLanguage: "vi",
+    mode: "groq" | "local" | "wasm"
+  }
+}
+```
+
+### Storage Limits
+
+| Browser | IndexedDB Limit | Notes |
+|---------|-----------------|-------|
+| Chrome | 80% of disk | Practically unlimited |
+| Firefox | 50% of disk | Practically unlimited |
+| Safari | 1GB | May need cleanup |
+
+---
+
+## 🔮 Phase 3: Community Features (Future)
+
+| # | Feature | Status | Priority |
+|---|---------|--------|----------|
+| 13 | Cloud Subtitle Sync | ⏳ Pending | 🟡 Medium |
+| 14 | Crowd-sourced Subtitles | ⏳ Pending | 🟡 Medium |
+| 15 | User Authentication | ⏳ Pending | 🟢 Low |
+| 16 | Voting/Moderation | ⏳ Pending | 🟢 Low |
+
+**Note:** Phase 3 sẽ implement sau khi Phase 2 hoàn thành và có user base.
